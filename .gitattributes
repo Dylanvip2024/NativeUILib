@@ -1,0 +1,17 @@
+# 统一换行符，避免 Windows 上满屏 LF/CRLF 警告
+* text=auto
+
+*.cs        text
+*.csproj    text
+*.sln       text
+*.md        text
+*.ps1       text
+*.gitignore text
+*.gitattributes text
+
+# 二进制
+*.dll  binary
+*.pdb  binary
+*.png  binary
+*.jpg  binary
+*.bundle binary

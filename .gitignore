@@ -1,0 +1,21 @@
+# ── 构建中间产物（不提交）──────────────────────────────
+obj/
+bin/
+.vs/
+.idea/
+*.user
+*.suo
+*.cache
+
+# ── 编译产物 ──────────────────────────────────────────
+# 故意保留 build/*.dll：方便别人直接从仓库下载 NativeUILib.dll，
+# 也方便你自己的其它模组用 <HintPath> 引用。
+# 不想提交二进制的话，把下面两行注释去掉即可。
+build/*.pdb
+samples/SampleAddon/build/*.pdb
+
+# ── 其它 ──────────────────────────────────────────────
+*.log
+LogOutput.log
+.DS_Store
+Thumbs.db

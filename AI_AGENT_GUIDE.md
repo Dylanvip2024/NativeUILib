@@ -5,6 +5,8 @@
 >
 > 阅读顺序建议：**第 1 节（决策树）→ 第 2 节（硬约束）→ 第 3 节（模板）→ 需要时查第 4 节（API 索引）**。
 > 第 8 节的**自检清单**在你交付代码前必须过一遍。
+>
+> 人类读者请看：[README.md](README.md)（English）｜ [README.zh-CN.md](README.zh-CN.md)（中文）
 
 ---
 
@@ -760,8 +762,13 @@ if (go == null) Logger.LogWarning("菜单按钮注入失败");
 
 ## 12. 参考
 
-- 库源码：`NativeUILib/src/`（每个文件头部都有注释说明职责）
+- 库源码：`src/`（每个文件头部都有注释说明职责）
 - 可编译示例：`samples/SampleAddon/`（`SampleWindow` / `SampleHud` / `SampleImGuiWindow` / `SampleSettingsModule`）
-- 游戏原生 UI 逆向报告：`../逆向源码/7.0.1/游戏原生UI调用指南.md`（含每个资源路径与贴图名的出处）
-- 真实世界参考实现：`../逆向源码/7.0.1/KrokoshaCasualtiesMP/`（`UIBullshit.cs` = IMGUI 皮肤，
-  `KrokoshaMainmenuBackground.cs` = 菜单注入 + 素材搜索）
+- 游戏原生 UI 逆向报告：[docs/native-ui-research.zh-CN.md](docs/native-ui-research.zh-CN.md)
+  （含每个资源路径、贴图名、注入点的出处与实机资产核对）
+- 英文版说明：[README.md](README.md)
+- 真实世界参考实现：第三方联机模组 **KrokoshaCasualtiesMP（Casualties: Together）**，其
+  `UIBullshit.cs` 展示了"用游戏贴图手搓 IMGUI 原生皮肤"的完整做法，
+  `KrokoshaMainmenuBackground.cs` 展示了主菜单注入 + `Resources.FindObjectsOfTypeAll` 搜素材的做法。
+  （该模组不在本仓库内，可从其发布页获取）
+

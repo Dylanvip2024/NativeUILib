@@ -1,112 +1,210 @@
 # NativeUILib
 
-给 **Casualties Unknown**（7.0.1 / Demo）做的**原生风格 UI 绘制库**。
-其他 BepInEx 模组引用它，就能用几行代码画出和游戏本体一模一样的界面。
+[![Release](https://img.shields.io/github/v/release/Dylanvip2024/NativeUILib?include_prereleases&sort=semver)](https://github.com/Dylanvip2024/NativeUILib/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/BepInEx-5.4.x-blue)](https://github.com/BepInEx/BepInEx)
 
-```
-NativeUI.Window("我的面板")
-    .AddLabel("你好")
-    .AddToggle("启用", true, v => Enabled = v)
-    .AddSlider("强度", 0f, 1f, 0.5f, v => Power = v, "0.00")
-    .AddButton("关闭", () => { });
+**English** | [中文](README.zh-CN.md)
+
+A **native-look UI toolkit** for **Casualties Unknown** (7.0.1 / Demo), shipped as a BepInEx 5 plugin.
+Other mods reference one DLL and get pixel-perfect, game-identical UI in a few lines of code.
+
+```csharp
+var w = NativeUI.Window("My Panel");
+w.AddLabel("Hello");
+w.AddToggle("Enable", true, v => Enabled = v);
+w.AddSlider("Power", 0f, 1f, 0.5f, v => Power = v, "0.00");
+w.AddButton("Close", () => w.Close());
 ```
 
 ---
 
-## 它解决什么问题
+## Why this exists
 
-游戏的原生 UI 是 **UGUI + TextMeshPro**（不是 IMGUI），所有控件都藏在 `Resources` 的
-`Special/GameSetting*` 预制体里，九宫格贴图则只存在于场景资产（`sharedassets`）里。
-自己从零复刻这套外观要踩很多坑：贴图不在 Resources、字体是场景资产、9 宫格 border 要按分辨率缩放、
-按钮有原生音效、tooltip 要走 `GlobalDark` 的全局流程、UI 必须放 "UI" 层才不会被世界点击穿透……
+The game's UI is **UGUI + TextMeshPro** — *not* IMGUI. Every control lives in `Resources` prefabs
+(`Special/GameSetting*`), while the 9-slice sprites only exist inside scene assets (`sharedassets`) and the
+pixel font (`Retro GamingPix`) is a scene-loaded TMP asset. Reproducing that look from scratch means fighting:
 
-**NativeUILib 把这些全部封好了**，对外只暴露 `NativeUI.*` / `NativeWindow` / `NativeRow` 三层 API。
+- sprites that are **not** in `Resources` (must be found via `Resources.FindObjectsOfTypeAll`),
+- a font that is **not** in `Resources` either,
+- 9-slice borders that must be rescaled per resolution,
+- native button sounds, the global tooltip pipeline (`GlobalDark`), the `UI` layer requirement (so world
+  clicks don't leak through), `Time.unscaledDeltaTime` for paused menus, and more.
 
-| 你会得到 | 说明 |
+**NativeUILib wraps all of it.** Instead of *imitating* the native look, it **reuses the game's own widgets**:
+row controls are instantiated straight from the game's `Special/GameSetting*` prefabs, so fidelity is 100% by
+construction. Everything degrades gracefully when a prefab/sprite/font is unavailable.
+
+| What you get | How |
 |---|---|
-| 原生控件 | 直接实例化 `Special/GameSettingBool/Float/Int/Dropdown/Input`，外观 100% 一致 |
-| 原生面板 | `uiBlock` / `uiBlockSmall` / `uiBlockNano` 九宫格，`Image.Type.Sliced` |
-| 原生字体 | 自动反查场景里的 `Retro GamingPix`；缺中文时自动挂系统中文字体 fallback |
-| 原生音效 | `click` / `miniClick` / `close` / `warning` … |
-| 原生 tooltip | 挂上 `UITooltip` 就由游戏统一绘制（自动跟随鼠标、屏幕边缘夹取、被眩晕扭曲） |
-| 原生弹窗 | `NativeUI.Confirm(...)` 全屏遮罩 + 居中面板 |
-| 原生提示条 | 游戏内直接调 `PlayerCamera.DoAlert` |
-| 菜单注入 | 克隆游戏自己的按钮塞进主菜单 / 暂停菜单 |
-| 设置项注入 | 一行 Harmony Postfix，自定义设置就出现在**游戏原生设置菜单**里 |
-| IMGUI 皮肤 | 老式 `OnGUI` 模组一行 `using (NativeGUISkin.Scope())` 也能用上原生贴图 |
+| Native controls | Instantiates the game's own `Special/GameSettingBool/Float/Int/Dropdown/Input` prefabs |
+| Native panels | `uiBlock` / `uiBlockSmall` / `uiBlockNano` 9-slice, `Image.Type.Sliced` |
+| Native font | Auto-resolves `Retro GamingPix`; optional OS-font fallback for CJK |
+| Native sounds | `click` / `miniClick` / `close` / `menuOpen` / `menuClose` / `warning` / `time` |
+| Native tooltips | Attach a `UITooltip`; the game draws it (follows cursor, clamps to screen, distorted when concussed) |
+| Native modal dialogs | `NativeUI.Confirm(...)` — full-screen dimmer + centered panel |
+| Native toasts | Calls `PlayerCamera.DoAlert` in-game; self-drawn panel in the main menu |
+| Menu injection | Clones real game buttons into the main menu / pause menu |
+| Settings injection | One Harmony postfix → your settings appear in the **game's own settings menu** |
+| IMGUI skin | Legacy `OnGUI` mods: `using (NativeGUISkin.Scope())` gets the native sprites too |
 
 ---
 
-## 安装
+## Requirements
 
-1. 编译（或直接拿 `build\NativeUILib.dll`）：
+| | |
+|---|---|
+| Game | Casualties Unknown (Unity **Mono**, `CasualtiesUnknown_Data`) |
+| Mod loader | **BepInEx 5.4.x** (HarmonyX) |
+| Build target | `net48`, built with `dotnet build` (.NET SDK 6+; needs the .NET Framework 4.8 targeting pack) |
 
-   ```powershell
-   .\build.ps1 -Deploy            # 编译并复制到游戏的 BepInEx\plugins
-   .\build.ps1 -Deploy -WithSample   # 连示例 Addon 一起
-   ```
+## Installation
 
-   > 游戏目录默认为 `D:\ruanjian\steam\steamapps\common\Casualties Unknown Demo`，
-   > 用 `-GameFolder "..."` 覆盖；也可以直接改 `NativeUILib.csproj` 里的 `<GameFolder>`。
+**Option A — download** the prebuilt `NativeUILib.dll` from
+[Releases](https://github.com/Dylanvip2024/NativeUILib/releases) and drop it into `BepInEx\plugins\`.
 
-2. 确保 `NativeUILib.dll` 在 `BepInEx\plugins\` 下（BepInEx 会把它当插件加载并写一条日志）。
+**Option B — build from source**
 
-## 在你自己的模组里引用
+```powershell
+.\build.ps1 -Deploy                 # build + copy into the game's BepInEx\plugins
+.\build.ps1 -Deploy -WithSample     # also build the sample addon
+```
+
+> The game folder defaults to `D:\ruanjian\steam\steamapps\common\Casualties Unknown Demo`.
+> Override with `-GameFolder "..."` or edit `<GameFolder>` in `NativeUILib.csproj`.
+
+BepInEx picks the DLL up as a plugin (`com.mod.casualties.nativeuilib`) and logs one line at startup.
+
+## Using it from your own mod
 
 ```xml
 <ItemGroup>
   <Reference Include="NativeUILib">
     <HintPath>..\NativeUILib\build\NativeUILib.dll</HintPath>
-    <Private>false</Private>   <!-- 关键：不要复制第二份 -->
+    <Private>false</Private>   <!-- important: never ship a second copy -->
   </Reference>
 </ItemGroup>
 ```
 
 ```csharp
-[BepInPlugin("你的.guid", "你的模组", "1.0.0")]
+[BepInPlugin("your.guid", "Your Mod", "1.0.0")]
 [BepInDependency(NativeUILibPlugin.Guid, BepInDependency.DependencyFlags.SoftDependency)]
-public class Plugin : BaseUnityPlugin { ... }
+public class Plugin : BaseUnityPlugin { /* ... */ }
 ```
 
-> 库是**懒初始化**的：即使不声明依赖、不调用 `NativeUI.Init()`，第一次用 API 时也会自动就绪。
-> 声明依赖只是为了让加载顺序更明确。
+> The library is **lazily initialised**: even without the dependency attribute or a call to `NativeUI.Init()`,
+> the first API call brings everything up. Declaring the dependency just makes load order explicit.
 
----
+## API cheat sheet
 
-## 文档
+```csharp
+// ── Windows (UGUI, draggable, auto-height, scrolls when too tall) ──
+var w = NativeUI.Window("Title");               // or Window(title, parent, width, height, autoSize)
+w.RememberPosition("my.mod.panel");             // persist drag position (PlayerPrefs)
+w.AddHeader("Section");                         // gold, centered
+w.AddLabel("Wrapped text", sizeMult: 1f);
+w.AddToggle("Enable", true, v => Enabled = v, "tooltip");
+w.AddSlider("Power", 0f, 1f, 0.5f, v => Power = v, "0.00", "tooltip");
+w.AddDropdown("Mode", new[] { "A", "B" }, 0, i => Mode = i);
+w.AddInput("Name", "Survivor", s => Name = s, freeText: true);
+w.AddButtonRow("Reset", "Click me", () => Reset());
+w.AddInlineButton("Label", "Click", () => { });
+w.AddSeparator(); w.AddSpace(8f);
+w.AddButton("Close", () => w.Close());
+w.Closed += () => _window = null;
 
-| 文件 | 读者 | 内容 |
+// ── Popups ──
+NativeUI.Toast("Saved", important: false, seconds: 4f);
+NativeUI.Message("Info", "Done.");
+NativeUI.Confirm("Delete save", "Are you sure?", onYes: Delete, onNo: null);
+NativeDialog.Choose("Pick one", "msg", new NativeDialog.Choice("A", OnA), new NativeDialog.Choice("B", OnB));
+
+// ── Integrate with the game's own UI ──
+NativeMenu.AddMainMenuButton("My Panel", OpenMyPanel);
+NativeMenu.AddPauseMenuButton("My Panel", OpenMyPanel);
+NativeUI.OpenNativeSettings(category: 2);       // 0=Video 1=Audio 2=Game 3=Input 4=Language
+NativeUI.ShowNativeText("Typewriter lore text…");
+
+// ── Assets / misc ──
+Sprite ui   = NativeUI.Sprite("uiBlockNano");   // null if not loaded yet
+var font    = NativeUI.Font;                     // Retro GamingPix
+NativeUI.PlayClick();                            // also PlayMiniClick/Close/Open/Deny
+bool overUI = NativeUI.IsPointerOverUI();
+bool inGame = NativeUI.InWorld;
+bool esOk   = NativeUI.HasEventSystem;
+NativeUI.DumpAssets();                           // diagnostics: sprite names, font, environment
+
+// ── CJK text (the pixel font has no CJK glyphs) ──
+NativeUI.AutoFontFallback = true;               // default: auto-register an OS font when a glyph is missing
+NativeUI.AddSystemFontFallback("Microsoft YaHei");
+bool cjk = NativeUI.ChineseAvailable;
+```
+
+**Raw controls** — `NativeRow` (one native settings row) is exposed when you need more control:
+
+```csharp
+var row = w.AddRow(NativeRowKind.Float, "Volume");
+row.Slider.minValue = 0f; row.Slider.maxValue = 1f;
+row.SetFloat(0.8f, notify: false);              // notify:false → no callback fired
+row.OnFloat(v => AudioListener.volume = v);
+```
+
+**IMGUI (legacy mods only)**
+
+```csharp
+private void OnGUI()
+{
+    using (NativeGUISkin.Scope())
+        GUILayout.Window(0, _rect, DrawWindow, "Title");
+}
+private void Awake() => NativeGUISkin.InstallInputBlockPatch();   // stop world clicks leaking through
+```
+
+## Gotchas worth knowing
+
+- **CJK text** – `Retro GamingPix` has no Chinese/Japanese glyphs. The library auto-registers an OS font
+  fallback the first time a glyph is missing; you can also set one explicitly.
+- **Timing** – native sprites/fonts only exist once the scene is loaded. The library re-indexes automatically on
+  every scene load, and degrades to plain panels/default fonts before that.
+- **Creating UI too early** – if you open a window from plugin `Awake()`, the game's `EventSystem` may not exist
+  yet (buttons won't react until it does). Prefer `Start()` + `NativeUI.RunNextFrame(...)`.
+- **Scene changes** – the library's overlay canvas is `DontDestroyOnLoad`, so windows survive; subscribe to
+  `NativeUI.SceneChanged` if your callbacks touch scene objects.
+- **One copy only** – reference with `<Private>false</Private>`.
+
+## Documentation
+
+| File | Audience | Contents |
 |---|---|---|
-| **[AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)** | **AI 智能体 / 需要完整参考的人** | 完整 API 签名、20+ 可复制示例、硬约束、自检清单、反模式、排障表 |
-| `samples/SampleAddon/` | 想抄代码的人 | 可编译的完整示例模组（窗口 / HUD / IMGUI / 设置注入 / 菜单注入） |
-| `../逆向源码/7.0.1/游戏原生UI调用指南.md` | 想理解原理的人 | 游戏原生 UI 的逆向研究结论（含出处与实机验证） |
+| **[AI_AGENT_GUIDE.md](AI_AGENT_GUIDE.md)** | AI coding agents / anyone wanting the full reference | Complete API signatures, 20+ copy-paste examples, hard constraints, pre-flight checklist, anti-patterns, troubleshooting (Chinese) |
+| [docs/native-ui-research.zh-CN.md](docs/native-ui-research.zh-CN.md) | Anyone curious about the internals | Reverse-engineering report: every resource path, sprite name and injection point, with source-line citations and asset verification (Chinese) |
+| [samples/SampleAddon/](samples/SampleAddon/) | People who learn by copying | A complete, compilable sample mod (window / HUD / IMGUI / settings injection / menu injection) |
 
----
-
-## 环境要求
-
-- 游戏：Casualties Unknown（Unity Mono，`CasualtiesUnknown_Data`）
-- BepInEx 5.4.x（HarmonyX）
-- 编译目标：`net48`，`dotnet build`（.NET SDK 6+ 均可；需要 .NET Framework 4.8 Targeting Pack）
-
-## 目录结构
+## Repository layout
 
 ```
 NativeUILib/
-├─ NativeUILib.csproj          库工程（net48）
+├─ NativeUILib.csproj           library project (net48)
 ├─ NativeUILib.sln
-├─ build.ps1                   编译 + 部署
-├─ build/NativeUILib.dll       产物
+├─ build.ps1                    build + deploy
+├─ build/                       build output (git-ignored — grab the DLL from Releases)
 ├─ src/
-│  ├─ Plugin.cs                BepInEx 入口 + 日志 + 常驻宿主（场景切换钩子）
-│  ├─ NativeUI.cs              ★ 统一入口（窗口/提示/对话框/原生设置/音效/素材）
-│  ├─ NativeWindow.cs          ★ 原生窗口（拖动、自动高度、滚动、位置记忆）
-│  ├─ NativeRow.cs             ★ 原生设置行（Toggle/Slider/Input/Dropdown/Button + 自绘降级）
-│  ├─ NativeAssets.cs          素材服务（Sprite 索引 / 字体 / fallback / 贴图加工）
-│  ├─ NativeTheme.cs           尺寸、字号、颜色规范
-│  ├─ NativeBuild.cs           内部构建原语
-│  ├─ NativeDialog.cs          模态对话框
-│  ├─ NativeMenu.cs            主菜单 / 暂停菜单注入
-│  └─ NativeGUISkin.cs         IMGUI 原生皮肤 + 世界输入屏蔽补丁
-└─ samples/SampleAddon/        可编译示例模组
+│  ├─ Plugin.cs                 BepInEx entry + logging + persistent host (scene hooks)
+│  ├─ NativeUI.cs               ★ facade (windows / toasts / dialogs / native settings / sounds / assets)
+│  ├─ NativeWindow.cs           ★ native window (drag, auto-height, scroll, position memory)
+│  ├─ NativeRow.cs              ★ native settings row (Toggle/Slider/Input/Dropdown/Button + fallback)
+│  ├─ NativeAssets.cs           asset service (sprite index / font / fallback / texture processing)
+│  ├─ NativeTheme.cs            sizes, font sizes, colours
+│  ├─ NativeBuild.cs            internal construction primitives
+│  ├─ NativeDialog.cs           modal dialogs
+│  ├─ NativeMenu.cs             main-menu / pause-menu injection
+│  └─ NativeGUISkin.cs          IMGUI native skin + world-input blocking patch
+├─ samples/SampleAddon/         compilable sample mod
+└─ docs/                        reverse-engineering notes
 ```
+
+## License
+
+[MIT](LICENSE) © 2026 Dylanvip2024
+
+Not affiliated with the developers of Casualties Unknown.
